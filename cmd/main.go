@@ -3,7 +3,7 @@ package main
 import (
 	"context"
 	"crypto/ecdsa"
-	"fmt"
+	"log"
 	"net/http"
 	"os"
 	"time"
@@ -74,7 +74,7 @@ func main() {
 		if err != nil {
 			panic(err)
 		}
-		fmt.Printf("chain id: %d", chainID)
+		log.Printf("chain id: %d", chainID)
 
 		spTransactor, err := sankoPredicts.NewSankoPredicts(scAddress, ethClient)
 		if err != nil {
@@ -89,11 +89,29 @@ func main() {
 		marketsSvc = markets.NewService(transactor, spTransactor)
 	}
 
+	approvedMarkets, err := marketsSvc.GetMarkets(ctx, markets.MarketStatusApproved)
+	if err != nil {
+		panic(err)
+	}
+	log.Printf("approved markets: %+v", approvedMarkets)
+
+	pendingMarkets, err := marketsSvc.GetMarkets(ctx, markets.MarketStatusPending)
+	if err != nil {
+		panic(err)
+	}
+	log.Printf("pending markets: %+v", pendingMarkets)
+
+	rejectedMarkets, err := marketsSvc.GetMarkets(ctx, markets.MarketStatusRejected)
+	if err != nil {
+		panic(err)
+	}
+	log.Printf("rejected markets: %+v", rejectedMarkets)
+
 	nbaMatches, err := espnSvc.GetNBAScoreboard(ctx)
 	if err != nil {
 		panic(err)
 	}
-	fmt.Printf("nba matches: %+v", nbaMatches)
+	log.Printf("nba matches: %+v", nbaMatches)
 
 	processMatches(ctx, marketsSvc, nbaMatches)
 }

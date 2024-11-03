@@ -2,7 +2,6 @@ package markets
 
 import (
 	"context"
-	"fmt"
 	"log"
 	"math/big"
 
@@ -84,7 +83,7 @@ func (svc *service) CreateMarket(ctx context.Context, cmd MarketCMD) error {
 		return err
 	}
 
-	fmt.Printf("Transaction sent: %s", tx.Hash().Hex())
+	log.Printf("Transaction sent: %s", tx.Hash().Hex())
 	return nil
 }
 
