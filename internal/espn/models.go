@@ -6,10 +6,12 @@ const (
 	BasketballSport = "basketball"
 	BaseballSport   = "baseball"
 	FootballSport   = "football"
+	MMASport        = "mma"
 
 	NBALeague = "nba"
 	MLBLeague = "mlb"
 	NFLLeague = "nfl"
+	UFCLeague = "ufc"
 )
 
 type ESPNMatch struct {

@@ -3,6 +3,7 @@ package main
 import (
 	"context"
 	"crypto/ecdsa"
+	"fmt"
 	"log"
 	"net/http"
 	"os"
@@ -20,10 +21,25 @@ import (
 	sankoPredicts "github.com/jeronimobarea/sp_predictions_bot/pkg/sankopredicts"
 )
 
+type Chain struct {
+	RPC                      string
+	PredictionsMarketAddress common.Address
+}
+
+const (
+	SankoChain    = "SANKO"
+	ArbitrumChain = "ARBITRUM"
+	BaseChain     = "BASE"
+	EthereumChain = "ETHEREUM"
+)
+
 var (
-	rpcURI           string
+	chains           map[string]Chain
+	marketSvcs       map[string]markets.Service
 	walletPrivateKey *ecdsa.PrivateKey
-	scAddress        common.Address
+
+	// validChains = []string{SankoChain, ArbitrumChain, BaseChain, EthereumChain}
+	validChains = []string{SankoChain}
 )
 
 func init() {
@@ -32,9 +48,25 @@ func init() {
 		panic(err)
 	}
 
-	rpcURI = os.Getenv("CHAIN_RPC_URI")
-	if rpcURI == "" {
-		panic("missing rpc uri")
+	chains = make(map[string]Chain)
+	marketSvcs = make(map[string]markets.Service)
+
+	for _, chain := range validChains {
+		rpcURI := os.Getenv(chain + "_RPC_URI")
+		if rpcURI == "" {
+			panic(fmt.Errorf("missing %s rpc uri", chain))
+		}
+
+		scAddress := os.Getenv(chain + "_PREDICTIONS_ADDRESS")
+		if scAddress == "" {
+			panic(fmt.Errorf("missing %s smart contract address", chain))
+		}
+		predictionsMarketAddress := common.HexToAddress(scAddress)
+
+		chains[chain] = Chain{
+			RPC:                      rpcURI,
+			PredictionsMarketAddress: predictionsMarketAddress,
+		}
 	}
 
 	pk := os.Getenv("SP_BOT_WALLET_PK")
@@ -45,12 +77,6 @@ func init() {
 	if err != nil {
 		panic(err)
 	}
-
-	address := os.Getenv("SP_SC_ADDRESS")
-	if address == "" {
-		panic("missing smart contract address")
-	}
-	scAddress = common.HexToAddress(address)
 }
 
 func main() {
@@ -62,65 +88,91 @@ func main() {
 		espnSvc = espn.NewService(espnClient)
 	}
 
-	var marketsSvc markets.Service
-	{
-
-		ethClient, err := ethclient.DialContext(ctx, rpcURI)
-		if err != nil {
-			panic(err)
-		}
-
-		chainID, err := ethClient.ChainID(ctx)
-		if err != nil {
-			panic(err)
-		}
-		log.Printf("chain id: %d", chainID)
-
-		spTransactor, err := sankoPredicts.NewSankoPredicts(scAddress, ethClient)
-		if err != nil {
-			panic(err)
-		}
-
-		transactor, err := bind.NewKeyedTransactorWithChainID(walletPrivateKey, chainID)
-		if err != nil {
-			panic(err)
-		}
-
-		marketsSvc = markets.NewService(transactor, spTransactor)
-	}
-
-	approvedMarkets, err := marketsSvc.GetMarkets(ctx, markets.MarketStatusApproved)
-	if err != nil {
-		panic(err)
-	}
-	log.Printf("approved markets: %+v", approvedMarkets)
-
-	pendingMarkets, err := marketsSvc.GetMarkets(ctx, markets.MarketStatusPending)
-	if err != nil {
-		panic(err)
-	}
-	log.Printf("pending markets: %+v", pendingMarkets)
-
-	rejectedMarkets, err := marketsSvc.GetMarkets(ctx, markets.MarketStatusRejected)
-	if err != nil {
-		panic(err)
-	}
-	log.Printf("rejected markets: %+v", rejectedMarkets)
-
 	nbaMatches, err := espnSvc.GetNBAScoreboard(ctx)
 	if err != nil {
 		panic(err)
 	}
 	log.Printf("nba matches: %+v", nbaMatches)
 
-	processMatches(ctx, marketsSvc, nbaMatches)
+	mlbMatches, err := espnSvc.GetMLBScoreboard(ctx)
+	if err != nil {
+		panic(err)
+	}
+	log.Printf("mlb matches: %+v", mlbMatches)
+
+	nflMatches, err := espnSvc.GetNFLScoreboard(ctx)
+	if err != nil {
+		panic(err)
+	}
+	log.Printf("nfl matches: %+v", nflMatches)
+
+	ufcMatches, err := espnSvc.GetUFCScoreboard(ctx)
+	if err != nil {
+		panic(err)
+	}
+	log.Printf("ufc matches: %+v", ufcMatches)
+
+	for chainName, chain := range chains {
+		svc := setupMarketSvc(ctx, chain.RPC, chain.PredictionsMarketAddress, walletPrivateKey)
+		marketSvcs[chainName] = svc
+
+		approvedMarkets, err := svc.GetMarkets(ctx, markets.MarketStatusApproved)
+		if err != nil {
+			panic(err)
+		}
+		log.Printf("approved markets: %+v", approvedMarkets)
+
+		pendingMarkets, err := svc.GetMarkets(ctx, markets.MarketStatusPending)
+		if err != nil {
+			panic(err)
+		}
+		log.Printf("pending markets: %+v", pendingMarkets)
+
+		rejectedMarkets, err := svc.GetMarkets(ctx, markets.MarketStatusRejected)
+		if err != nil {
+			panic(err)
+		}
+		log.Printf("rejected markets: %+v", rejectedMarkets)
+
+		// processMatches(ctx, svc, nbaMatches)
+		// processMatches(ctx, svc, mlbMatches)
+		// processMatches(ctx, svc, nflMatches)
+		// processMatches(ctx, svc, ufcMatches)
+	}
+}
+
+func setupMarketSvc(ctx context.Context, rpcURI string, scAddress common.Address, pk *ecdsa.PrivateKey) markets.Service {
+	chainClient, err := ethclient.DialContext(ctx, rpcURI)
+	if err != nil {
+		panic(err)
+	}
+
+	chainID, err := chainClient.ChainID(ctx)
+	if err != nil {
+		panic(err)
+	}
+	log.Printf("chain RPC: %s <-> chain id: %d", rpcURI, chainID)
+
+	spTransactor, err := sankoPredicts.NewSankoPredicts(scAddress, chainClient)
+	if err != nil {
+		panic(err)
+	}
+
+	transactor, err := bind.NewKeyedTransactorWithChainID(pk, chainID)
+	if err != nil {
+		panic(err)
+	}
+
+	return markets.NewService(transactor, spTransactor)
 }
 
 func processMatches(ctx context.Context, marketsSvc markets.Service, matches []espn.ESPNMatch) {
 	for _, match := range matches {
-		if match.Date.Unix() <= time.Now().Unix() {
+		if match.Date.Unix() <= time.Now().Unix() ||
+			match.Date.Unix() > time.Now().AddDate(0, 0, 7).Unix() {
 			continue
 		}
+
 		err := marketsSvc.CreateMarket(ctx, markets.MarketCMD{
 			GameName:   match.Name,
 			CandidateA: match.TeamA,

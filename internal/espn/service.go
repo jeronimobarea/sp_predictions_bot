@@ -12,6 +12,7 @@ type Service interface {
 	GetNBAScoreboard(ctx context.Context) ([]ESPNMatch, error)
 	GetMLBScoreboard(ctx context.Context) ([]ESPNMatch, error)
 	GetNFLScoreboard(ctx context.Context) ([]ESPNMatch, error)
+	GetUFCScoreboard(ctx context.Context) ([]ESPNMatch, error)
 }
 
 type service struct {
@@ -46,6 +47,15 @@ func (svc *service) GetMLBScoreboard(ctx context.Context) ([]ESPNMatch, error) {
 
 func (svc *service) GetNFLScoreboard(ctx context.Context) ([]ESPNMatch, error) {
 	resp, err := svc.client.GetScoreboard(ctx, FootballSport, NFLLeague)
+	if err != nil {
+		return nil, err
+	}
+
+	return svc.parseMatches(resp.Events)
+}
+
+func (svc *service) GetUFCScoreboard(ctx context.Context) ([]ESPNMatch, error) {
+	resp, err := svc.client.GetScoreboard(ctx, MMASport, UFCLeague)
 	if err != nil {
 		return nil, err
 	}

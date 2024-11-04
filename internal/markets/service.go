@@ -63,27 +63,28 @@ func (svc *service) CreateMarket(ctx context.Context, cmd MarketCMD) error {
 		if market.CandidateA == cmd.CandidateA &&
 			market.CandidateB == cmd.CandidateB &&
 			market.GameName == cmd.GameName {
+
 			log.Printf("duplicated game: %+v", market)
 			continue
 		}
+
+		tx, err := svc.sankoPredicts.CreateElectionGame(
+			svc.transactor,
+			cmd.GameName,
+			big.NewInt(cmd.ExpiryTime.Unix()),
+			big.NewInt(cmd.LockTime.Unix()),
+			ElectionGameType,
+			cmd.CandidateA,
+			cmd.CandidateB,
+			cmd.ImageURL,
+			svc.transactor.From,
+		)
+		if err != nil {
+			return err
+		}
+		log.Printf("Transaction sent: %s", tx.Hash().Hex())
 	}
 
-	tx, err := svc.sankoPredicts.CreateElectionGame(
-		svc.transactor,
-		cmd.GameName,
-		big.NewInt(cmd.ExpiryTime.Unix()),
-		big.NewInt(cmd.LockTime.Unix()),
-		ElectionGameType,
-		cmd.CandidateA,
-		cmd.CandidateB,
-		cmd.ImageURL,
-		svc.transactor.From,
-	)
-	if err != nil {
-		return err
-	}
-
-	log.Printf("Transaction sent: %s", tx.Hash().Hex())
 	return nil
 }
 
