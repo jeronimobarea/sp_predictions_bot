@@ -82,7 +82,7 @@ func (svc *service) CreateMarket(ctx context.Context, cmd MarketCMD) error {
 		if err != nil {
 			return err
 		}
-		log.Printf("Transaction sent: %s", tx.Hash().Hex())
+		log.Printf("transaction sent: %s", tx.Hash().Hex())
 	}
 
 	return nil

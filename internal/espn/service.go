@@ -3,6 +3,7 @@ package espn
 import (
 	"context"
 	"fmt"
+	"strings"
 	"time"
 
 	"github.com/jeronimobarea/sp_predictions_bot/internal/espn/client"
@@ -60,7 +61,39 @@ func (svc *service) GetUFCScoreboard(ctx context.Context) ([]ESPNMatch, error) {
 		return nil, err
 	}
 
-	return svc.parseMatches(resp.Events)
+	var matches []ESPNMatch
+	for _, event := range resp.Events {
+		for _, fightNight := range event.Competitions {
+			date, err := time.Parse(RFC3339Z, fightNight.Date)
+			if err != nil {
+				return nil, err
+			}
+
+			if len(fightNight.Competitors) != 2 {
+				return nil, fmt.Errorf("error competitors amount missmatch: %v", event.Competitions)
+			}
+
+			matchName := fmt.Sprintf(
+				"%s: %s VS %s",
+				event.ShortName,
+				fightNight.Competitors[0].Athlete.DisplayName,
+				fightNight.Competitors[1].Athlete.DisplayName,
+			)
+
+			match := newESPNMatch(
+				event.ID,
+				date,
+				matchName,
+				fightNight.Competitors[0].Athlete.DisplayName,
+				fightNight.Competitors[0].Athlete.Logo,
+				fightNight.Competitors[1].Athlete.DisplayName,
+				fightNight.Competitors[1].Athlete.Logo,
+			)
+			matches = append(matches, match)
+		}
+	}
+
+	return matches, nil
 }
 
 func (svc *service) parseMatches(events []client.Event) ([]ESPNMatch, error) {
@@ -79,10 +112,12 @@ func (svc *service) parseMatches(events []client.Event) ([]ESPNMatch, error) {
 			return nil, fmt.Errorf("error competitors amount missmatch: %v", event.Competitions)
 		}
 
+		matchName := strings.Replace(event.Name, " at ", " VS ", 1)
+
 		match := newESPNMatch(
 			event.ID,
 			date,
-			event.Name,
+			matchName,
 			event.Competitions[0].Competitors[0].Team.DisplayName,
 			event.Competitions[0].Competitors[0].Team.Logo,
 			event.Competitions[0].Competitors[1].Team.DisplayName,
