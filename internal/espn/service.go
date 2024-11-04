@@ -70,7 +70,7 @@ func (svc *service) GetUFCScoreboard(ctx context.Context) ([]ESPNMatch, error) {
 			}
 
 			if len(fightNight.Competitors) != 2 {
-				return nil, fmt.Errorf("error competitors amount missmatch: %v", event.Competitions)
+				return nil, fmt.Errorf("error competitors amount missmatch: %+v", event.Competitions)
 			}
 
 			matchName := fmt.Sprintf(
@@ -81,7 +81,6 @@ func (svc *service) GetUFCScoreboard(ctx context.Context) ([]ESPNMatch, error) {
 			)
 
 			match := newESPNMatch(
-				event.ID,
 				date,
 				matchName,
 				fightNight.Competitors[0].Athlete.DisplayName,
@@ -105,17 +104,16 @@ func (svc *service) parseMatches(events []client.Event) ([]ESPNMatch, error) {
 		}
 
 		if len(event.Competitions) != 1 {
-			return nil, fmt.Errorf("error competitions amount missmatch: %v", event.Competitions)
+			return nil, fmt.Errorf("error competitions amount missmatch: %+v", event.Competitions)
 		}
 
 		if len(event.Competitions[0].Competitors) != 2 {
-			return nil, fmt.Errorf("error competitors amount missmatch: %v", event.Competitions)
+			return nil, fmt.Errorf("error competitors amount missmatch: %+v", event.Competitions[0].Competitors)
 		}
 
 		matchName := strings.Replace(event.Name, " at ", " VS ", 1)
 
 		match := newESPNMatch(
-			event.ID,
 			date,
 			matchName,
 			event.Competitions[0].Competitors[0].Team.DisplayName,

@@ -15,7 +15,6 @@ const (
 )
 
 type ESPNMatch struct {
-	ID        string
 	Date      time.Time
 	Name      string
 	TeamA     string
@@ -25,7 +24,6 @@ type ESPNMatch struct {
 }
 
 func newESPNMatch(
-	id string,
 	date time.Time,
 	name string,
 	teamA string,
@@ -34,7 +32,6 @@ func newESPNMatch(
 	teamBLogo string,
 ) ESPNMatch {
 	return ESPNMatch{
-		ID:        id,
 		Date:      date,
 		Name:      name,
 		TeamA:     teamA,
