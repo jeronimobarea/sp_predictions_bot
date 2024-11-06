@@ -6,7 +6,6 @@ type (
 	}
 
 	Event struct {
-		ID           string        `json:"id"`
 		Date         string        `json:"date"`
 		Name         string        `json:"name"`
 		ShortName    string        `json:"shortName"`
@@ -14,6 +13,7 @@ type (
 	}
 
 	Competition struct {
+		ID          string       `json:"id"`
 		Date        string       `json:"date,omitempty"`
 		Competitors []Competitor `json:"competitors"`
 	}

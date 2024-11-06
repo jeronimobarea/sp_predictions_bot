@@ -1,0 +1,47 @@
+version: "3.9"
+
+services:
+  postgres:
+    image: postgres:latest
+    environment:
+      POSTGRES_USER: postgres
+      POSTGRES_PASSWORD: postgres
+      POSTGRES_DB: sp_predictions_bot
+    restart: always
+    ports:
+      - "5432"
+    volumes:
+      - pgdata:/var/lib/postgresql/data
+
+  migrate:
+    image: migrate/migrate
+    depends_on:
+      - postgres
+    volumes:
+      - migrations:/database
+    command:
+      [ "-path", "/database", "-database",  "postgres://postgres:postgres@postgres:5432/cqrs?sslmode=disable", "up" ]
+
+  build:
+    container_name: sp_predictions_bot_build
+    build:
+      target: build
+      context: .
+
+  sp_predictions_bot:
+    container_name: sp_predictions_bot
+    build:
+      target: sp_predictions_bot
+      context: .
+    restart: always
+    depends_on:
+      postgres:
+        condition: service_healthy
+    ports:
+      - "3000:3000"
+    environment:
+      POSTGRES_USER: postgres
+      POSTGRES_PASSWORD: postgres
+      POSTGRES_DB: sp_predictions_bot
+    volumes:
+      - .:/sp_predictions_bot

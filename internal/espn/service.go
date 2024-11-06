@@ -3,6 +3,7 @@ package espn
 import (
 	"context"
 	"fmt"
+	"log"
 	"strings"
 	"time"
 
@@ -14,19 +15,57 @@ type Service interface {
 	GetMLBScoreboard(ctx context.Context) ([]ESPNMatch, error)
 	GetNFLScoreboard(ctx context.Context) ([]ESPNMatch, error)
 	GetUFCScoreboard(ctx context.Context) ([]ESPNMatch, error)
+
+	GetAllScoreboards(ctx context.Context) ([]ESPNMatch, error)
 }
 
 type service struct {
 	client client.Client
 }
 
-func NewService(client client.Client) *service {
+func NewService(
+	client client.Client,
+) *service {
 	return &service{
 		client: client,
 	}
 }
 
 const RFC3339Z = "2006-01-02T15:04Z07:00"
+
+func (svc *service) GetAllScoreboards(ctx context.Context) ([]ESPNMatch, error) {
+	nbaMatches, err := svc.GetNBAScoreboard(ctx)
+	if err != nil {
+		return nil, err
+	}
+	log.Printf("nba matches: %+v\n\n", nbaMatches)
+
+	mlbMatches, err := svc.GetMLBScoreboard(ctx)
+	if err != nil {
+		return nil, err
+	}
+	log.Printf("mlb matches: %+v\n\n", mlbMatches)
+
+	nflMatches, err := svc.GetNFLScoreboard(ctx)
+	if err != nil {
+		return nil, err
+	}
+	log.Printf("nfl matches: %+v\n\n", nflMatches)
+
+	ufcMatches, err := svc.GetUFCScoreboard(ctx)
+	if err != nil {
+		return nil, err
+	}
+	log.Printf("ufc matches: %+v\n\n", ufcMatches)
+
+	var matches []ESPNMatch
+	matches = append(matches, nbaMatches...)
+	matches = append(matches, mlbMatches...)
+	matches = append(matches, nflMatches...)
+	matches = append(matches, ufcMatches...)
+
+	return matches, nil
+}
 
 func (svc *service) GetNBAScoreboard(ctx context.Context) ([]ESPNMatch, error) {
 	resp, err := svc.client.GetScoreboard(ctx, BasketballSport, NBALeague)
@@ -81,17 +120,16 @@ func (svc *service) GetUFCScoreboard(ctx context.Context) ([]ESPNMatch, error) {
 			)
 
 			match := newESPNMatch(
+				fightNight.ID,
 				date,
 				matchName,
 				fightNight.Competitors[0].Athlete.DisplayName,
-				fightNight.Competitors[0].Athlete.Logo,
 				fightNight.Competitors[1].Athlete.DisplayName,
 				fightNight.Competitors[1].Athlete.Logo,
 			)
 			matches = append(matches, match)
 		}
 	}
-
 	return matches, nil
 }
 
@@ -114,15 +152,14 @@ func (svc *service) parseMatches(events []client.Event) ([]ESPNMatch, error) {
 		matchName := strings.Replace(event.Name, " at ", " VS ", 1)
 
 		match := newESPNMatch(
+			event.Competitions[0].ID,
 			date,
 			matchName,
 			event.Competitions[0].Competitors[0].Team.DisplayName,
-			event.Competitions[0].Competitors[0].Team.Logo,
 			event.Competitions[0].Competitors[1].Team.DisplayName,
 			event.Competitions[0].Competitors[1].Team.Logo,
 		)
 		matches = append(matches, match)
 	}
-
 	return matches, nil
 }
