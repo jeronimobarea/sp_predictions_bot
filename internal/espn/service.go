@@ -3,11 +3,11 @@ package espn
 import (
 	"context"
 	"fmt"
-	"log"
 	"strings"
 	"time"
 
 	"github.com/jeronimobarea/sp_predictions_bot/internal/espn/client"
+	"go.uber.org/zap"
 )
 
 type Service interface {
@@ -21,13 +21,16 @@ type Service interface {
 
 type service struct {
 	client client.Client
+	logger *zap.SugaredLogger
 }
 
 func NewService(
 	client client.Client,
+	logger *zap.SugaredLogger,
 ) *service {
 	return &service{
 		client: client,
+		logger: logger,
 	}
 }
 
@@ -38,25 +41,33 @@ func (svc *service) GetAllScoreboards(ctx context.Context) ([]ESPNMatch, error) 
 	if err != nil {
 		return nil, err
 	}
-	log.Printf("nba matches: %+v\n\n", nbaMatches)
+	svc.logger.Infow("NBA matches",
+		"matches", nbaMatches,
+	)
 
 	mlbMatches, err := svc.GetMLBScoreboard(ctx)
 	if err != nil {
 		return nil, err
 	}
-	log.Printf("mlb matches: %+v\n\n", mlbMatches)
+	svc.logger.Infow("MLB matches",
+		"matches", mlbMatches,
+	)
 
 	nflMatches, err := svc.GetNFLScoreboard(ctx)
 	if err != nil {
 		return nil, err
 	}
-	log.Printf("nfl matches: %+v\n\n", nflMatches)
+	svc.logger.Infow("NFL matches",
+		"matches", nflMatches,
+	)
 
 	ufcMatches, err := svc.GetUFCScoreboard(ctx)
 	if err != nil {
 		return nil, err
 	}
-	log.Printf("ufc matches: %+v\n\n", ufcMatches)
+	svc.logger.Infow("UFC matches",
+		"matches", ufcMatches,
+	)
 
 	var matches []ESPNMatch
 	matches = append(matches, nbaMatches...)
@@ -73,7 +84,7 @@ func (svc *service) GetNBAScoreboard(ctx context.Context) ([]ESPNMatch, error) {
 		return nil, err
 	}
 
-	return svc.parseMatches(resp.Events)
+	return svc.parseMatches(BasketballSport, resp.Events)
 }
 
 func (svc *service) GetMLBScoreboard(ctx context.Context) ([]ESPNMatch, error) {
@@ -82,7 +93,7 @@ func (svc *service) GetMLBScoreboard(ctx context.Context) ([]ESPNMatch, error) {
 		return nil, err
 	}
 
-	return svc.parseMatches(resp.Events)
+	return svc.parseMatches(BaseballSport, resp.Events)
 }
 
 func (svc *service) GetNFLScoreboard(ctx context.Context) ([]ESPNMatch, error) {
@@ -91,7 +102,7 @@ func (svc *service) GetNFLScoreboard(ctx context.Context) ([]ESPNMatch, error) {
 		return nil, err
 	}
 
-	return svc.parseMatches(resp.Events)
+	return svc.parseMatches(FootballSport, resp.Events)
 }
 
 func (svc *service) GetUFCScoreboard(ctx context.Context) ([]ESPNMatch, error) {
@@ -122,6 +133,7 @@ func (svc *service) GetUFCScoreboard(ctx context.Context) ([]ESPNMatch, error) {
 			match := newESPNMatch(
 				fightNight.ID,
 				date,
+				MMASport,
 				matchName,
 				fightNight.Competitors[0].Athlete.DisplayName,
 				fightNight.Competitors[1].Athlete.DisplayName,
@@ -133,7 +145,7 @@ func (svc *service) GetUFCScoreboard(ctx context.Context) ([]ESPNMatch, error) {
 	return matches, nil
 }
 
-func (svc *service) parseMatches(events []client.Event) ([]ESPNMatch, error) {
+func (svc *service) parseMatches(esport string, events []client.Event) ([]ESPNMatch, error) {
 	var matches []ESPNMatch
 	for _, event := range events {
 		date, err := time.Parse(RFC3339Z, event.Date)
@@ -154,6 +166,7 @@ func (svc *service) parseMatches(events []client.Event) ([]ESPNMatch, error) {
 		match := newESPNMatch(
 			event.Competitions[0].ID,
 			date,
+			esport,
 			matchName,
 			event.Competitions[0].Competitors[0].Team.DisplayName,
 			event.Competitions[0].Competitors[1].Team.DisplayName,

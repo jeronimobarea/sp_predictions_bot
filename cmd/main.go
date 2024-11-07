@@ -5,7 +5,6 @@ import (
 	"crypto/ecdsa"
 	"database/sql"
 	"fmt"
-	"log"
 	"net/http"
 	"os"
 
@@ -15,6 +14,7 @@ import (
 	"github.com/ethereum/go-ethereum/ethclient"
 	"github.com/joho/godotenv"
 	"github.com/openai/openai-go"
+	"go.uber.org/zap"
 
 	"github.com/jeronimobarea/sp_predictions_bot/internal/espn"
 	espnClient "github.com/jeronimobarea/sp_predictions_bot/internal/espn/client"
@@ -82,10 +82,16 @@ func init() {
 func main() {
 	ctx := context.Background()
 
+	l, err := zap.NewProduction()
+	if err != nil {
+		panic(err)
+	}
+	logger := l.Sugar()
+
 	var espnSvc espn.Service
 	{
 		espnClient := espnClient.NewClient(http.DefaultClient)
-		espnSvc = espn.NewService(espnClient)
+		espnSvc = espn.NewService(espnClient, logger)
 	}
 
 	var matchesSvc matches.Service
@@ -103,7 +109,7 @@ func main() {
 	openaiClient := openai.NewClient()
 
 	for _, chain := range chains {
-		svc := setupMarketSvc(ctx, matchesSvc, openaiClient, chain.RPC, chain.PredictionsMarketAddress, walletPrivateKey)
+		svc := setupMarketSvc(ctx, logger, matchesSvc, openaiClient, chain.RPC, chain.PredictionsMarketAddress, walletPrivateKey)
 
 		matches, err := espnSvc.GetAllScoreboards(ctx)
 		if err != nil {
@@ -117,7 +123,7 @@ func main() {
 	}
 }
 
-func setupMarketSvc(ctx context.Context, matchesSvc matches.Service, openaiClient *openai.Client, rpcURI string, scAddress common.Address, pk *ecdsa.PrivateKey) markets.Service {
+func setupMarketSvc(ctx context.Context, logger *zap.SugaredLogger, matchesSvc matches.Service, openaiClient *openai.Client, rpcURI string, scAddress common.Address, pk *ecdsa.PrivateKey) markets.Service {
 	chainClient, err := ethclient.DialContext(ctx, rpcURI)
 	if err != nil {
 		panic(err)
@@ -127,7 +133,10 @@ func setupMarketSvc(ctx context.Context, matchesSvc matches.Service, openaiClien
 	if err != nil {
 		panic(err)
 	}
-	log.Printf("chain RPC: %s <-> chain id: %d\n\n", rpcURI, chainID)
+	logger.Infow("chain connection made",
+		"RPC", rpcURI,
+		"ChainID", chainID,
+	)
 
 	spTransactor, err := sankoPredicts.NewSankoPredicts(scAddress, chainClient)
 	if err != nil {
@@ -139,7 +148,7 @@ func setupMarketSvc(ctx context.Context, matchesSvc matches.Service, openaiClien
 		panic(err)
 	}
 
-	return markets.NewService(transactor, spTransactor, matchesSvc, openaiClient)
+	return markets.NewService(transactor, spTransactor, matchesSvc, openaiClient, logger)
 }
 
 func buildDBUrl() string {

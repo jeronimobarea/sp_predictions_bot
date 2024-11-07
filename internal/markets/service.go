@@ -5,12 +5,12 @@ import (
 	"database/sql"
 	"errors"
 	"fmt"
-	"log"
 	"math/big"
 	"time"
 
 	"github.com/ethereum/go-ethereum/accounts/abi/bind"
 	"github.com/openai/openai-go"
+	"go.uber.org/zap"
 
 	"github.com/jeronimobarea/sp_predictions_bot/internal/espn"
 	"github.com/jeronimobarea/sp_predictions_bot/internal/matches"
@@ -28,6 +28,7 @@ type service struct {
 	sankoPredicts *sankoPredicts.SankoPredicts
 	matchesSvc    matches.Service
 	openaiClient  *openai.Client
+	logger        *zap.SugaredLogger
 }
 
 func NewService(
@@ -35,12 +36,14 @@ func NewService(
 	sankoPredicts *sankoPredicts.SankoPredicts,
 	matchesSvc matches.Service,
 	openaiClient *openai.Client,
+	logger *zap.SugaredLogger,
 ) *service {
 	return &service{
 		transactor:    transactor,
 		sankoPredicts: sankoPredicts,
 		matchesSvc:    matchesSvc,
 		openaiClient:  openaiClient,
+		logger:        logger,
 	}
 }
 
@@ -79,7 +82,9 @@ func (svc *service) CreateMarket(ctx context.Context, cmd MarketCMD) error {
 			market.GameName == cmd.GameName &&
 			market.Creator == svc.transactor.From {
 
-			log.Printf("duplicated game: %+v\n\n", market)
+			svc.logger.Warnw("duplicated market",
+				"market", market,
+			)
 			continue
 		}
 
@@ -97,7 +102,10 @@ func (svc *service) CreateMarket(ctx context.Context, cmd MarketCMD) error {
 		if err != nil {
 			return err
 		}
-		log.Printf("transaction sent: %s\n\n", tx.Hash().Hex())
+		svc.logger.Infow("market created",
+			"TransactionID", tx.Hash().Hex(),
+			"Market", cmd,
+		)
 	}
 	return nil
 }
@@ -130,7 +138,7 @@ func (svc *service) ProcessMatches(ctx context.Context, matchList []espn.ESPNMat
 				return err
 			}
 
-			matchImageURL, err = svc.generateMatchBanner(ctx, match.Name)
+			matchImageURL, err = svc.generateMatchBanner(ctx, match.Esport, match.Name)
 			if err != nil {
 				return err
 			}
@@ -146,7 +154,6 @@ func (svc *service) ProcessMatches(ctx context.Context, matchList []espn.ESPNMat
 			if err != nil {
 				return err
 			}
-
 		}
 		matchImageURL = savedMatch.BannerURL
 
@@ -165,10 +172,25 @@ func (svc *service) ProcessMatches(ctx context.Context, matchList []espn.ESPNMat
 	return nil
 }
 
-func (svc *service) generateMatchBanner(ctx context.Context, matchName string) (string, error) {
+func (svc *service) generateMatchBanner(ctx context.Context, esport, matchName string) (string, error) {
+	var prompt string
+	switch esport {
+	case espn.BaseballSport:
+		prompt = fmt.Sprintf("Design a high-energy baseball match banner featuring %s with both team logos prominently displayed. The background shows a packed baseball stadium under bright lights, with a detailed view of the field and scoreboard. Incorporate baseballs, bats, gloves, and home plate to highlight the baseball theme. Use dynamic lighting, bold colors, and a sense of motion to capture the excitement of a baseball rivalry.", matchName)
+	case espn.BasketballSport:
+		prompt = fmt.Sprintf("Create an intense sports match banner featuring %s with both team logos displayed prominently. The background shows a vibrant basketball arena, with spotlights and the hardwood court visible. Include basketballs, hoops, and other relevant elements that highlight the basketball theme. Use bold, vivid colors and dynamic design to convey the thrill of a high-stakes game.", matchName)
+	case espn.FootballSport:
+		prompt = fmt.Sprintf("Create a dynamic sports match banner featuring %s with both players’ names and national flags (if applicable) prominently displayed. The background should show a tennis court with vibrant lighting and a clear view of the net. Add tennis rackets, balls, and sport-specific elements to emphasize the tennis theme. Use vibrant, contrasting colors and an energetic design to reflect the intensity of a high-level match.", matchName)
+	case espn.MMASport:
+		prompt = fmt.Sprintf("Create an intense UFC fight banner featuring %s with both fighters' names and national flags prominently displayed. Show an octagon cage under powerful, dramatic lighting with a roaring crowd in the background. Include UFC gloves, a cage fence, and dynamic shadows to emphasize the raw energy and intensity of a high-stakes fight. Use bold colors, contrast, and a cinematic style to convey the fierce, competitive atmosphere of a UFC showdown.", matchName)
+	default:
+		return "", fmt.Errorf("esport type prompt not supported: %s", esport)
+	}
+
 	res, err := svc.openaiClient.Images.Generate(ctx, openai.ImageGenerateParams{
-		Prompt: openai.String(fmt.Sprintf("draw %s banner featuring both team logos, a dynamic stadium background, and a bold design", matchName)),
-		Model:  openai.String("dall-e-3"),
+		Prompt:  openai.String(prompt),
+		Model:   openai.String("dall-e-3"),
+		Quality: openai.F(openai.ImageGenerateParamsQualityHD),
 	})
 	if err != nil {
 		return "", err
