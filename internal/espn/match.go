@@ -21,6 +21,7 @@ type ESPNMatch struct {
 	Name      string
 	TeamA     string
 	TeamB     string
+	Duration  time.Duration
 	BannerURL string
 }
 
@@ -33,6 +34,20 @@ func newESPNMatch(
 	teamB string,
 	bannerURL string,
 ) ESPNMatch {
+	var duration time.Duration
+	switch esport {
+	case BaseballSport:
+		duration = 3 * time.Hour
+	case FootballSport:
+		duration = 72 * time.Minute
+	case BasketballSport:
+		duration = 3 * time.Hour
+	case MMASport:
+		duration = 30 * time.Minute
+	default:
+		duration = time.Hour
+	}
+
 	return ESPNMatch{
 		ID:        id,
 		Date:      date,
@@ -40,6 +55,7 @@ func newESPNMatch(
 		Name:      name,
 		TeamA:     teamA,
 		TeamB:     teamB,
+		Duration:  duration,
 		BannerURL: bannerURL,
 	}
 }

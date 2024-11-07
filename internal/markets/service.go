@@ -161,7 +161,7 @@ func (svc *service) ProcessMatches(ctx context.Context, matchList []espn.ESPNMat
 			GameName:   match.Name,
 			CandidateA: match.TeamA,
 			CandidateB: match.TeamB,
-			ExpiryTime: match.Date.Add(time.Hour),
+			ExpiryTime: match.Date.Add(match.Duration),
 			LockTime:   match.Date,
 			ImageURL:   matchImageURL,
 		})
