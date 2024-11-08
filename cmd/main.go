@@ -99,7 +99,7 @@ func main() {
 		dbUrl := buildDBUrl()
 		db, err := sql.Open("postgres", dbUrl)
 		if err != nil {
-			panic(err)
+			logger.Fatal(err)
 		}
 
 		repo := matchesRepository.NewRepository(db)
@@ -113,12 +113,12 @@ func main() {
 
 		matches, err := espnSvc.GetAllScoreboards(ctx)
 		if err != nil {
-			panic(err)
+			logger.Fatal(err)
 		}
 
 		err = svc.ProcessMatches(ctx, matches)
 		if err != nil {
-			panic(err)
+			logger.Fatal(err)
 		}
 	}
 }
@@ -126,12 +126,12 @@ func main() {
 func setupMarketSvc(ctx context.Context, logger *zap.SugaredLogger, matchesSvc matches.Service, openaiClient *openai.Client, rpcURI string, scAddress common.Address, pk *ecdsa.PrivateKey) markets.Service {
 	chainClient, err := ethclient.DialContext(ctx, rpcURI)
 	if err != nil {
-		panic(err)
+		logger.Fatal(err)
 	}
 
 	chainID, err := chainClient.ChainID(ctx)
 	if err != nil {
-		panic(err)
+		logger.Fatal(err)
 	}
 	logger.Infow("chain connection made",
 		"RPC", rpcURI,
@@ -140,12 +140,12 @@ func setupMarketSvc(ctx context.Context, logger *zap.SugaredLogger, matchesSvc m
 
 	spTransactor, err := sankoPredicts.NewSankoPredicts(scAddress, chainClient)
 	if err != nil {
-		panic(err)
+		logger.Fatal(err)
 	}
 
 	transactor, err := bind.NewKeyedTransactorWithChainID(pk, chainID)
 	if err != nil {
-		panic(err)
+		logger.Fatal(err)
 	}
 
 	return markets.NewService(transactor, spTransactor, matchesSvc, openaiClient, logger)
