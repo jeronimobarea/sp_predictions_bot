@@ -6,11 +6,13 @@ const (
 	BasketballSport = "basketball"
 	BaseballSport   = "baseball"
 	FootballSport   = "football"
+	HockeySport     = "hockey"
 	MMASport        = "mma"
 
 	NBALeague = "nba"
 	MLBLeague = "mlb"
 	NFLLeague = "nfl"
+	NHLLeague = "nhl"
 	UFCLeague = "ufc"
 )
 

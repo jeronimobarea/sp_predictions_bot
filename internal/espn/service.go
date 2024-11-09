@@ -14,6 +14,7 @@ type Service interface {
 	GetNBAScoreboard(ctx context.Context) ([]ESPNMatch, error)
 	GetMLBScoreboard(ctx context.Context) ([]ESPNMatch, error)
 	GetNFLScoreboard(ctx context.Context) ([]ESPNMatch, error)
+	GetNHLScoreboard(ctx context.Context) ([]ESPNMatch, error)
 	GetUFCScoreboard(ctx context.Context) ([]ESPNMatch, error)
 
 	GetAllScoreboards(ctx context.Context) ([]ESPNMatch, error)
@@ -61,6 +62,14 @@ func (svc *service) GetAllScoreboards(ctx context.Context) ([]ESPNMatch, error) 
 		"matches", nflMatches,
 	)
 
+	nhlMatches, err := svc.GetNHLScoreboard(ctx)
+	if err != nil {
+		return nil, err
+	}
+	svc.logger.Infow("NHL matches",
+		"matches", nhlMatches,
+	)
+
 	ufcMatches, err := svc.GetUFCScoreboard(ctx)
 	if err != nil {
 		return nil, err
@@ -73,6 +82,7 @@ func (svc *service) GetAllScoreboards(ctx context.Context) ([]ESPNMatch, error) 
 	matches = append(matches, nbaMatches...)
 	matches = append(matches, mlbMatches...)
 	matches = append(matches, nflMatches...)
+	matches = append(matches, nhlMatches...)
 	matches = append(matches, ufcMatches...)
 
 	return matches, nil
@@ -103,6 +113,15 @@ func (svc *service) GetNFLScoreboard(ctx context.Context) ([]ESPNMatch, error) {
 	}
 
 	return svc.parseMatches(FootballSport, resp.Events)
+}
+
+func (svc *service) GetNHLScoreboard(ctx context.Context) ([]ESPNMatch, error) {
+	resp, err := svc.client.GetScoreboard(ctx, HockeySport, NHLLeague)
+	if err != nil {
+		return nil, err
+	}
+
+	return svc.parseMatches(HockeySport, resp.Events)
 }
 
 func (svc *service) GetUFCScoreboard(ctx context.Context) ([]ESPNMatch, error) {

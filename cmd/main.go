@@ -82,11 +82,15 @@ func init() {
 func main() {
 	ctx := context.Background()
 
-	l, err := zap.NewProduction()
-	if err != nil {
-		panic(err)
+	var logger *zap.SugaredLogger
+	{
+		l, err := zap.NewDevelopment()
+		if err != nil {
+			panic(err)
+		}
+
+		logger = l.Sugar()
 	}
-	logger := l.Sugar()
 
 	var espnSvc espn.Service
 	{
