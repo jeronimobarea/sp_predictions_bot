@@ -1,0 +1,15 @@
+BEGIN TRANSACTION;
+
+CREATE TYPE valid_chains AS ENUM ('ARBITRUM', 'SANKO', 'APE', 'BASE', 'ETHEREUM')
+
+CREATE TABLE markets(
+    id BIGINT PRIMARY KEY,
+    chain VALID_CHAINS,
+    creator VARCHAR(255),
+    a_seed_amount DECIMAL,
+    b_seed_amount DECIMAL,
+    creation_date TIMESTAMP WITH TIME ZONE DEFAULT NOW(),
+    update_date TIMESTAMP WITH TIME ZONE
+);
+
+COMMIT TRANSACTION;

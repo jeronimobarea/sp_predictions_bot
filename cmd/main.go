@@ -5,8 +5,10 @@ import (
 	"crypto/ecdsa"
 	"database/sql"
 	"fmt"
+	"math/big"
 	"net/http"
 	"os"
+	"time"
 
 	"github.com/ethereum/go-ethereum/accounts/abi/bind"
 	"github.com/ethereum/go-ethereum/common"
@@ -19,12 +21,14 @@ import (
 	"github.com/jeronimobarea/sp_predictions_bot/internal/espn"
 	espnClient "github.com/jeronimobarea/sp_predictions_bot/internal/espn/client"
 	"github.com/jeronimobarea/sp_predictions_bot/internal/markets"
+	marketsRepository "github.com/jeronimobarea/sp_predictions_bot/internal/markets/repository"
 	"github.com/jeronimobarea/sp_predictions_bot/internal/matches"
 	matchesRepository "github.com/jeronimobarea/sp_predictions_bot/internal/matches/repository"
 	sankoPredicts "github.com/jeronimobarea/sp_predictions_bot/pkg/sankopredicts"
 )
 
 type Chain struct {
+	Name                     string
 	RPC                      string
 	PredictionsMarketAddress common.Address
 }
@@ -32,8 +36,9 @@ type Chain struct {
 const (
 	SankoChain    = "SANKO"
 	ArbitrumChain = "ARBITRUM"
-	BaseChain     = "BASE"
 	EthereumChain = "ETHEREUM"
+	BaseChain     = "BASE"
+	ApeChain      = "APE"
 )
 
 var (
@@ -64,6 +69,7 @@ func init() {
 		predictionsMarketAddress := common.HexToAddress(scAddress)
 
 		chains[chain] = Chain{
+			Name:                     chain,
 			RPC:                      rpcURI,
 			PredictionsMarketAddress: predictionsMarketAddress,
 		}
@@ -107,27 +113,72 @@ func main() {
 		}
 
 		repo := matchesRepository.NewRepository(db)
-		matchesSvc = matches.NewService(repo)
+
+		openaiClient := openai.NewClient()
+
+		matchesSvc = matches.NewService(repo, openaiClient)
 	}
 
-	openaiClient := openai.NewClient()
-
-	for _, chain := range chains {
-		svc := setupMarketSvc(ctx, logger, matchesSvc, openaiClient, chain.RPC, chain.PredictionsMarketAddress, walletPrivateKey)
-
-		matches, err := espnSvc.GetAllScoreboards(ctx)
+	var marketsRepo markets.Repository
+	{
+		dbUrl := buildDBUrl()
+		db, err := sql.Open("postgres", dbUrl)
 		if err != nil {
 			logger.Fatal(err)
 		}
 
-		err = svc.ProcessMatches(ctx, matches)
-		if err != nil {
-			logger.Fatal(err)
+		marketsRepo = marketsRepository.NewRepository(db)
+	}
+
+	matches, err := espnSvc.GetAllScoreboards(ctx)
+	if err != nil {
+		logger.Fatal(err)
+	}
+
+	processedMatches, err := matchesSvc.ProcessMatches(ctx, matches)
+	if err != nil {
+		logger.Fatal(err)
+	}
+
+	for _, chain := range chains {
+		marketsSvc := setupMarketSvc(ctx, chain.Name, logger, matchesSvc, marketsRepo, chain.RPC, chain.PredictionsMarketAddress, walletPrivateKey)
+
+		for _, match := range processedMatches {
+			market, err := marketsSvc.CreateMarket(ctx, markets.MarketCMD{
+				GameName:   match.Name,
+				CandidateA: match.TeamA,
+				CandidateB: match.TeamB,
+				ExpiryTime: match.Date.Add(time.Hour),
+				LockTime:   match.Date,
+				ImageURL:   match.BannerURL,
+			})
+			if err != nil {
+				logger.Error(err)
+			}
+
+			err = marketsSvc.SeedMarket(ctx, match, market.Id, big.NewInt(1), markets.MarketASeedingOption)
+			if err != nil {
+				logger.Error(err)
+			}
+
+			err = marketsSvc.SeedMarket(ctx, match, market.Id, big.NewInt(1), markets.MarketBSeedingOption)
+			if err != nil {
+				logger.Error(err)
+			}
 		}
 	}
 }
 
-func setupMarketSvc(ctx context.Context, logger *zap.SugaredLogger, matchesSvc matches.Service, openaiClient *openai.Client, rpcURI string, scAddress common.Address, pk *ecdsa.PrivateKey) markets.Service {
+func setupMarketSvc(
+	ctx context.Context,
+	chain string,
+	logger *zap.SugaredLogger,
+	matchesSvc matches.Service,
+	repo markets.Repository,
+	rpcURI string,
+	scAddress common.Address,
+	pk *ecdsa.PrivateKey,
+) markets.Service {
 	chainClient, err := ethclient.DialContext(ctx, rpcURI)
 	if err != nil {
 		logger.Fatal(err)
@@ -152,7 +203,7 @@ func setupMarketSvc(ctx context.Context, logger *zap.SugaredLogger, matchesSvc m
 		logger.Fatal(err)
 	}
 
-	return markets.NewService(transactor, spTransactor, matchesSvc, openaiClient, logger)
+	return markets.NewService(transactor, spTransactor, matchesSvc, repo, chain, logger)
 }
 
 func buildDBUrl() string {
